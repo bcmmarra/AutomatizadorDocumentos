@@ -160,45 +160,48 @@ def gerar_documentos():
     print("🚀 Iniciando a Automação de Geração de Documentos (Múltiplos Modelos)...")
     print("-" * 60)
 
-    # Constrói o caminho do arquivo Excel no DISCO (onde o usuário edita e salva)
-    caminho_planilha_disco = os.path.join('..', 'dados', NOME_PLANILHA)
-    
-    # Constrói o caminho do arquivo Excel para LEITURA (no local TEMPORÁRIO do PyInstaller)
-    # Este é o backup da planilha original.
-    caminho_planilha_leitura_backup = os.path.join(PASTA_DADOS, NOME_PLANILHA) 
+    if getattr(sys, 'frozen', False):
+        # Modo PyInstaller (EXE está em 'dist', precisa subir um nível para acessar 'dados')
+        caminho_planilha_disco = os.path.join('..', 'dados', NOME_PLANILHA)
+    else:
+        # Modo de Desenvolvimento (Script está no raiz do projeto, a pasta 'dados' está ao lado)
+        caminho_planilha_disco = os.path.join('dados', NOME_PLANILHA)
 
     # Cria a pasta de saída se ela não existir
     os.makedirs(PASTA_SAIDA, exist_ok=True)
     
     # --- Leitura e Preparação Inicial do DataFrame ---
     try:
-        # TENTA LER O ARQUIVO NO DISCO (onde o usuário preenche os dados)
+        # Tenta LER O ARQUIVO NO DISCO (prioridade 1: versão editada pelo usuário)
         df = pd.read_excel(caminho_planilha_disco).fillna(VALOR_PADRAO_VAZIO)
+        print(f"💾 Planilha lida do disco: '{caminho_planilha_disco}'.")
+
     except FileNotFoundError:
         # Se for a primeira execução e o arquivo não existe no disco:
-        print(f"⚠️ A planilha de dados não foi encontrada no disco original: '{caminho_planilha_disco}'.")
+        print(f"⚠️ A planilha de dados não foi encontrada no disco original. Tentando ler backup...")
         try:
             # LÊ O ARQUIVO EMPACOTADO (o backup)
-            print(f"  Tentando ler a versão empacotada...")
             df = pd.read_excel(caminho_planilha_leitura_backup).fillna(VALOR_PADRAO_VAZIO)
             
-            # Garante que a pasta 'dados' existe no disco, se não existir
+            # Garante que a pasta 'dados' existe no disco
             os.makedirs(os.path.dirname(caminho_planilha_disco), exist_ok=True)
             
-            # COPIA a estrutura lida do backup para o disco, para que o usuário possa editar
+            # COPIA a estrutura lida do backup para o disco
             df.to_excel(caminho_planilha_disco, index=False, engine='openpyxl')
-            print(f"💾 O arquivo foi copiado para o disco para edição: '{caminho_planilha_disco}'.")
+            print(f"✅ Backup copiado. O arquivo '{caminho_planilha_disco}' foi criado no disco para edição.")
         except Exception as e:
             # Trata o erro de backup ou erro ao salvar a cópia inicial
             print(f"❌ ERRO CRÍTICO ao ler ou copiar a planilha: {e}")
             sys.exit(1)
+            
     except Exception as e:
         # Trata outros erros de leitura do Excel (ex: arquivo aberto)
         print(f"❌ ERRO ao ler a planilha Excel do disco: {e}")
         sys.exit(1)
 
     # --- Sincronização de Colunas ---
-    # A variável 'df' AGORA contém os dados lidos do DISCO (ou a cópia inicial no 1º run).
+    # O df contém a versão mais atualizada (ou a cópia inicial). 
+    # O caminho do disco é passado para que, se houver novas variáveis, a versão no disco seja sobrescrita.
     df_foi_modificado = checar_e_atualizar_colunas(df, caminho_planilha_disco)
     
     if df_foi_modificado:
@@ -209,6 +212,10 @@ def gerar_documentos():
     # --- Limpeza do DataFrame ---
     # Cria uma cópia do DataFrame descartando linhas onde a coluna de modelo é o valor padrão
     df_limpo = df[df[COLUNA_TEMPLATE] != VALOR_PADRAO_VAZIO].copy()
+    # ... (o restante da função é o mesmo) ...
+    # ...
+    # ...
+    
     linhas_descartadas = len(df) - len(df_limpo)
     df = df_limpo # Atribui o DataFrame limpo de volta à variável principal
     
@@ -289,10 +296,8 @@ def gerar_documentos():
     print("-" * 60)
     print(f"🎉 Automação Concluída!")
     print(f"{contador} documentos gerados com sucesso na pasta '{PASTA_SAIDA}'.")
-
-# --------------------------------------------------------------------------------------------------
-
-# Verifica se o script está sendo executado diretamente (e não importado)
+    
+    
 if __name__ == "__main__":
     # Chama a função principal
     gerar_documentos()
